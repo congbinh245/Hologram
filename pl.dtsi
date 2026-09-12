@@ -1,7 +1,3 @@
-/*
- * Fixed for Hologram Pipeline Integration
- */
-
 /dts-v1/;
 /plugin/;
 / {
@@ -32,10 +28,51 @@
 		};
 	};
 	fragment@2 {
-		target = <&amba>;
+		target-path = "/";
 		overlay2: __overlay__ {
+			imx219_vana: fixedregulator0 {
+				compatible = "regulator-fixed";
+				regulator-name = "imx219_vana";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <2800000>;
+			};
+			imx219_vdig: fixedregulator1 {
+				compatible = "regulator-fixed";
+				regulator-name = "imx219_vdig";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+			};
+			imx219_vddl: fixedregulator2 {
+				compatible = "regulator-fixed";
+				regulator-name = "imx219_vddl";
+				regulator-min-microvolt = <1200000>;
+				regulator-max-microvolt = <1200000>;
+			};
+			imx219_clk: camera-clk {
+				compatible = "fixed-clock";
+				#clock-cells = <0>;
+				clock-frequency = <24000000>;
+			};
+		};
+	};
+	fragment@3 {
+		target = <&amba>;
+		overlay3: __overlay__ {
 			#address-cells = <2>;
 			#size-cells = <2>;
+
+			misc_clk_0: misc_clk_0 {
+				#clock-cells = <0>;
+				clock-frequency = <99999000>;
+				compatible = "fixed-clock";
+			};
+
+			misc_clk_1: misc_clk_1 {
+				#clock-cells = <0>;
+				clock-frequency = <199998000>;
+				compatible = "fixed-clock";
+			};
+
 			axi_iic_0: i2c@80010000 {
 				#address-cells = <1>;
 				#size-cells = <0>;
@@ -46,45 +83,38 @@
 				interrupt-parent = <&gic>;
 				interrupts = <0 89 4>;
 				reg = <0x0 0x80010000 0x0 0x10000>;
-			};
-			misc_clk_0: misc_clk_0 {
-				#clock-cells = <0>;
-				clock-frequency = <99999000>;
-				compatible = "fixed-clock";
-			};
-			hologram: hologram_splitter_4way@a0010000 {
-				clock-names = "ap_clk";
-				clocks = <&misc_clk_1>;
-				compatible = "xlnx,hologram-splitter-4way-2.0", "xlnx,hls-axis";
-				interrupt-names = "interrupt";
-				interrupt-parent = <&gic>;
-				interrupts = <0 94 4>;
-				reg = <0x0 0xa0010000 0x0 0x10000>;
-				xlnx,s-axi-control-addr-width = <0x4>;
-				xlnx,s-axi-control-data-width = <0x20>;
-				
-				ports {
+
+				iic_mux_0: i2c_mux@74 {
+					compatible = "nxp,pca9546";
 					#address-cells = <1>;
 					#size-cells = <0>;
-					port@0 {
-						reg = <0>;
-						hologramv_proc_ss_scaler: endpoint {
-							remote-endpoint = <&sca_outv_proc_ss_scaler>;
-						};
-					};
-					port@1 {
-						reg = <1>;
-						hologram_out: endpoint {
-							remote-endpoint = <&v_frmbuf_wr_in>;
+					reg = <0x74>;
+					isa0_i2c0: i2c@0 { reg = <0>; };
+					isa1_i2c1: i2c@1 { reg = <1>; };
+					rpi_i2c2: i2c@2 {
+						#address-cells = <1>;
+						#size-cells = <0>;
+						reg = <2>;
+						imx219: sensor@10 {
+							compatible = "sony,imx219";
+							reg = <0x10>;
+							clocks = <&imx219_clk>;
+							VANA-supply = <&imx219_vana>;
+							VDIG-supply = <&imx219_vdig>;
+							VDDL-supply = <&imx219_vddl>;
+							port {
+								imx219_0: endpoint {
+									remote-endpoint = <&mipi_csi_inmipi_csi2_rx_subsyst>;
+									data-lanes = <1 2>;
+									clock-noncontinuous;
+									link-frequencies = /bits/ 64 <456000000>;
+								};
+							};
 						};
 					};
 				};
 			};
-			misc_clk_1: misc_clk_1 {
-				#clock-cells = <0>;
-				clock-frequency = <199998000>;
-				compatible = "fixed-clock";
-			};
+
 			mipi_csi2_rx_subsyst: mipi_csi2_rx_subsystem@80000000 {
 				clock-names = "lite_aclk", "dphy_clk_200M", "video_aclk";
 				clocks = <&misc_clk_0>, <&misc_clk_1>, <&misc_clk_1>;
@@ -98,14 +128,12 @@
 				xlnx,max-lanes = <2>;
 				xlnx,ppc = <1>;
 				xlnx,vc = <4>;
-				xlnx,vfb ;
+				xlnx,vfb;
 				mipi_csi_portsmipi_csi2_rx_subsyst: ports {
 					#address-cells = <1>;
 					#size-cells = <0>;
 					mipi_csi_port1mipi_csi2_rx_subsyst: port@1 {
 						reg = <1>;
-						xlnx,cfa-pattern = "rggb";
-						xlnx,video-format = <12>;
 						xlnx,video-width = <8>;
 						mipi_csirx_outmipi_csi2_rx_subsyst: endpoint {
 							remote-endpoint = <&v_demosaicmipi_csi2_rx_subsyst>;
@@ -113,15 +141,15 @@
 					};
 					mipi_csi_port0mipi_csi2_rx_subsyst: port@0 {
 						reg = <0>;
-						xlnx,cfa-pattern = "rggb";
-						xlnx,video-format = <12>;
 						xlnx,video-width = <8>;
 						mipi_csi_inmipi_csi2_rx_subsyst: endpoint {
+							remote-endpoint = <&imx219_0>;
 							data-lanes = <1 2>;
 						};
 					};
 				};
 			};
+
 			v_demosaic: v_demosaic@a0020000 {
 				clock-names = "ap_clk";
 				clocks = <&misc_clk_1>;
@@ -140,7 +168,6 @@
 					#size-cells = <0>;
 					demosaic_port1v_demosaic: port@1 {
 						reg = <1>;
-						xlnx,cfa-pattern = "rggb";
 						xlnx,video-width = <8>;
 						demo_outv_demosaic: endpoint {
 							remote-endpoint = <&v_gamma_lutv_demosaic>;
@@ -148,7 +175,6 @@
 					};
 					demosaic_port0v_demosaic: port@0 {
 						reg = <0>;
-						xlnx,cfa-pattern = "rggb";
 						xlnx,video-width = <8>;
 						v_demosaicmipi_csi2_rx_subsyst: endpoint {
 							remote-endpoint = <&mipi_csirx_outmipi_csi2_rx_subsyst>;
@@ -156,37 +182,7 @@
 					};
 				};
 			};
-			v_frmbuf_wr: v_frmbuf_wr@a0030000 {
-				#dma-cells = <1>;
-				clock-names = "ap_clk";
-				clocks = <&misc_clk_1>;
-				compatible = "xlnx,v-frmbuf-wr-2.4", "xlnx,axi-frmbuf-wr-v2.2";
-				interrupt-names = "interrupt";
-				interrupt-parent = <&gic>;
-				interrupts = <0 93 4>;
-				reg = <0x0 0xa0030000 0x0 0x10000>;
-				reset-gpios = <&gpio 82 1>;
-				xlnx,dma-addr-width = <64>;
-				xlnx,dma-align = <8>;
-				xlnx,max-height = <1080>;
-				xlnx,max-width = <1920>;
-				xlnx,pixels-per-clock = <1>;
-				xlnx,s-axi-ctrl-addr-width = <0x7>;
-				xlnx,s-axi-ctrl-data-width = <0x20>;
-				xlnx,vid-formats = "rgb888", "bgr888", "xbgr8888", "xrgb8888", "vuy888", "xvuy8888", "nv12";
-				xlnx,video-width = <8>;
-				
-				ports {
-					#address-cells = <1>;
-					#size-cells = <0>;
-					port@0 {
-						reg = <0>;
-						v_frmbuf_wr_in: endpoint {
-							remote-endpoint = <&hologram_out>;
-						};
-					};
-				};
-			};
+
 			v_gamma_lut: v_gamma_lut@a0080000 {
 				clock-names = "ap_clk";
 				clocks = <&misc_clk_1>;
@@ -219,6 +215,7 @@
 					};
 				};
 			};
+
 			v_proc_ss_csc: v_proc_ss@a0000000 {
 				clock-names = "aclk";
 				clocks = <&misc_clk_1>;
@@ -255,6 +252,7 @@
 					};
 				};
 			};
+
 			v_proc_ss_scaler: v_proc_ss@a0040000 {
 				clock-names = "aclk_axis", "aclk_ctrl";
 				clocks = <&misc_clk_1>, <&misc_clk_1>;
@@ -296,6 +294,72 @@
 						xlnx,video-width = <8>;
 						v_proc_ss_scalerv_proc_ss_csc: endpoint {
 							remote-endpoint = <&csc_outv_proc_ss_csc>;
+						};
+					};
+				};
+			};
+
+			hologram: hologram_splitter_4way@a0010000 {
+				clock-names = "ap_clk";
+				clocks = <&misc_clk_1>;
+				compatible = "xlnx,hologram-splitter-4way-2.0";
+				interrupt-names = "interrupt";
+				interrupt-parent = <&gic>;
+				interrupts = <0 94 4>;
+				reg = <0x0 0xa0010000 0x0 0x10000>;
+				xlnx,s-axi-control-addr-width = <0x4>;
+				xlnx,s-axi-control-data-width = <0x20>;
+				ports {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					port@0 {
+						reg = <0>;
+						hologramv_proc_ss_scaler: endpoint {
+							remote-endpoint = <&sca_outv_proc_ss_scaler>;
+						};
+					};
+					port@1 {
+						reg = <1>;
+						hologram_out: endpoint {
+							remote-endpoint = <&vcap_in>;
+						};
+					};
+				};
+			};
+
+			v_frmbuf_wr: v_frmbuf_wr@a0030000 {
+				#dma-cells = <1>;
+				clock-names = "ap_clk";
+				clocks = <&misc_clk_1>;
+				compatible = "xlnx,v-frmbuf-wr-2.4", "xlnx,axi-frmbuf-wr-v2.2";
+				interrupt-names = "interrupt";
+				interrupt-parent = <&gic>;
+				interrupts = <0 93 4>;
+				reg = <0x0 0xa0030000 0x0 0x10000>;
+				reset-gpios = <&gpio 82 1>;
+				xlnx,dma-addr-width = <64>;
+				xlnx,dma-align = <8>;
+				xlnx,max-height = <1080>;
+				xlnx,max-width = <1920>;
+				xlnx,pixels-per-clock = <1>;
+				xlnx,s-axi-ctrl-addr-width = <0x7>;
+				xlnx,s-axi-ctrl-data-width = <0x20>;
+				xlnx,vid-formats = "rgb888", "bgr888", "xbgr8888", "xrgb8888", "vuy888", "xvuy8888", "nv12";
+				xlnx,video-width = <8>;
+			};
+
+			vcap_holo {
+				compatible = "xlnx,video";
+				dma-names = "port0";
+				dmas = <&v_frmbuf_wr 0>;
+				ports {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					port@0 {
+						reg = <0>;
+						direction = "input";
+						vcap_in: endpoint {
+							remote-endpoint = <&hologram_out>;
 						};
 					};
 				};
