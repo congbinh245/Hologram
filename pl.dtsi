@@ -348,6 +348,8 @@
 				VANA-supply = <&imx219_vana>;
 				VDIG-supply = <&imx219_vdig>;
 				VDDL-supply = <&imx219_vddl>;
+				reset-gpios = <&gpio 110 0>;
+				reset-names = "reset";
 				port {
 					imx219_0: endpoint {
 						remote-endpoint = <&mipi_csi_inmipi_csi2_rx_subsyst>;
